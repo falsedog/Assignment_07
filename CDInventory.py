@@ -10,12 +10,13 @@
 #------------------------------------------#
 
 # -- IMPORTS -- #
+import pickle
 
 # -- DATA -- #
 strChoice = ''  # User input
 lstTbl = []  # list of lists to hold data
 dicRow = {}  # list of data row
-strFileName = 'CDInventory.txt'  # data storage filename
+strFileName = 'CDInventory.dat'  # data storage filename
 objFile = None  # file object
 
 
@@ -39,12 +40,11 @@ class DataProcessor:
             Updated list of dictionaries table.
         """
         addRow = {'ID': aIntID, 'Title': aTitle, 'Artist': aArtist}
-        # I could use lstTbl directly, but this feels like safer practice
         aTable.append(addRow)
         return aTable
 
     @staticmethod
-    def delete_album(searchID, dTable):
+    def delete_album(searchID, lstTbl):
         """Function to remove an entry from a list of dictionaries
 
         Loops through the list of dictionaries seeking an entry that matches a
@@ -57,21 +57,16 @@ class DataProcessor:
         Returns:
             None.
         """
-        try:
-            int(searchID)
-        except TypeError:
-            print('Search ID isn\'t a valid number to search for, please try again')
-            return
         intRowNr = -1
         blnCDRemoved = False
-        for row in dTable:
+        for row in lstTbl:
             intRowNr += 1
             if row['ID'] == searchID:
                 del lstTbl[intRowNr]
                 blnCDRemoved = True
                 break
         if blnCDRemoved:
-            print('The CD was removed')
+            print('The CD was removed\n')
         else:
             print('Could not find this CD!')
 
@@ -93,84 +88,77 @@ class FileProcessor:
         Returns:
             None.
         """
-        global strFileName # Reach outside the function scope for this case, a bigger program would probably change the origins of strFileName to access it
+        global strFileName # To break out of the scope of this function to modify this variable
         while True:
             print(
-                'Would you like to specify a different fileName or Create a new blank file?')
-            # I want to improve the presentation here but I also don't
-            print('Please input a choice n or c')
+                'Would you like to specify a different [F]ilename or [C]reate a new blank file?')
+            # I want to improve the presentation here but I also don't until I can change a lot more of the presentation
+            print('Please input a choice f or c')
             handlerChoice = input()
             if handlerChoice.lower() == 'c':
                 try:
-                    with open(strFileName, 'a') as existenceTouch:
+                    with open(strFileName, 'a') as existenceTouch: # This works for pickles sort of* like other files
                         existenceTouch.write('')
                     print(
-                        'Okay, blank file should be there now, try loading or saving again')
+                        'Okay, blank file exists now, if you were saving, try again') # Imperfect accounting but better to communicate more
                     return
-                except Exception as e:  # Very generic error, might try to refine
+                except Exception as e:  # Very generic error
                     print(
                         'Hey is something wrong with my access to the filesystem? You might need to fix that for me...', e, sep='\n')
                         # Not much we can do in scope if so
-            elif handlerChoice.lower() == 'n':  # In the future this might become a separate function
-                print('Please input the filename you would like to use (ending in .txt)')
-                # In the future extensions will be handled differently, but for txt files this is fine
-                strFileName = input()
+            elif handlerChoice.lower() == 'f':  # In the future this might become a separate function
+                print('Please input the filename you would like to use (ending in .dat is conventional)')
+                strFileName = input().strip()
                 print('Filename changed, returning to menu, please try loading again')
-                return  # Go back to main menu to use this name
+                return  # Go back to main menu
             else:
                 print('That wasn\'t a valid option, sorry, try that again')
                 # Loops here
 
     @staticmethod
-    def read_file(file_name, rTable):  # Renamed variable to better match my other namings
+    def read_file(strFileName, lstTbl):
         """Function to manage data ingestion from file to a list of dictionaries
 
-        Reads the data from file identified by file_name into a 2D table
+        Reads the data from file identified by strFileName into a 2D table
         (list of dicts) table one line in the file represents one dictionary row in table.
 
         Args:
-            file_name (string): name of file used to read the data from
+            strFileName (string): name of file used to read the data from
             rTable (list of dict): 2D data structure (list of dicts) that holds the data in this function
 
         Returns:
             None.
         """
-        rTable.clear()  # this clears existing data and allows to load data from file
+        lstTbl.clear()  # this clears existing data
         try:
-            with open(file_name, 'r') as inventoryRead:
-                for line in inventoryRead.readlines():
-                    tempLine = line.rstrip().split(',')
-                    tempDict = {
-                        'ID': int(tempLine[0]), 'Title': tempLine[1], 'Artist': tempLine[2]}
-                    rTable.append(tempDict)
-        except FileNotFoundError as e:
-            print('File not found!', e, sep='\n')# Prints e in case there's more worth knowing but also continues
+            with open(strFileName, 'rb') as inventoryRead:
+                lstTbl.extend(pickle.load(inventoryRead))
+        except FileNotFoundError:
+            print('Cannot find file: ', strFileName)
             FileProcessor.filename_handler()
+        except EOFError: # *Pickles care a little more about what's inside
+            print('File is blank, proceeding with empty database')
 
     @staticmethod
-    def write_file(file_name, wTable):
+    def write_file(strFileName, wTable):
         """Function to write the inventory to a file
 
         Unpacks dictionary, composes strings and concatenates them and writes
         that to a file.
 
         Args:
-            file_name (Str): name of the inventory file
+            strFileName (Str): name of the inventory file
             wTable (list of dict): 2D data structure (list of dicts) that holds the data in this function
 
         Returns:
             None.
         """
         try:
-            with open(file_name, 'w') as inventoryWrite:
-                for row in wTable:
-                    lstValues = list(row.values())
-                    lstValues[0] = str(lstValues[0])
-                    inventoryWrite.write(','.join(lstValues) + '\n')
+            with open(strFileName, 'wb') as inventoryWrite:
+                pickle.dump(wTable, inventoryWrite)
         except FileNotFoundError as e:
             print('Can\'t access the file', e, sep='\n')
             FileProcessor.filename_handler()
-        return
 
 
 # -- PRESENTATION (Input/Output) -- #
@@ -241,14 +229,14 @@ class IO:
         """
         while True:
             fID = input('Enter ID: ').strip()
-            fTitle = input('What is the CD\'s title? ').strip()
-            fArtist = input('What is the Artist\'s name? ').strip()  # lol
             try:
                 fIntID = int(fID)
             except ValueError:
-                print('Sorry that ID wasn\'t a valid number, please try again')
+                print('Sorry that ID wasn\'t a valid number, please try again\n')
                 continue
-            else:  # It's my understanding you can keep your try blocks small like this but it does feel a little weird
+            else: # I understand you can keep the try blocks smaller this way but it feels weird
+                fTitle = input('What is the CD\'s title? ').strip()
+                fArtist = input('What is the Artist\'s name? ').strip()  # lol
                 newAlbumInput = [fIntID, fTitle, fArtist]
                 return newAlbumInput
 
@@ -271,7 +259,7 @@ while True:
         strYesNo = input(
             'type \'yes\' to continue and reload from file, otherwise reload will be canceled\n')
         if strYesNo.lower().strip() == 'yes':
-            print('reloading...')
+            print('reloading', strFileName)
             FileProcessor.read_file(strFileName, lstTbl)
             IO.show_inventory(lstTbl)
         else:
@@ -284,7 +272,6 @@ while True:
         # 3.3.1 Ask user for new ID, CD Title and Artist
         newEntry = IO.new_album_query()
         # 3.3.2 Add item to the table
-        # Could pass dictionary or tuple or something directly but this feels more easily future modifiable?
         lstTbl = DataProcessor.new_album_add(
             newEntry[0], newEntry[1], newEntry[2], lstTbl)
         IO.show_inventory(lstTbl)
@@ -299,7 +286,12 @@ while True:
         # 3.5.1.1 display Inventory to user
         IO.show_inventory(lstTbl)
         # 3.5.1.2 ask user which ID to remove
-        intIDDel = int(input('Which ID would you like to delete? ').strip())
+        IDDel = input('Which ID would you like to delete? ').strip()
+        try:
+            intIDDel = int(IDDel)
+        except ValueError:
+            print('Search ID isn\'t a valid number to search for, please try again')
+            continue # Easier way to have them try again without making a new loop
         # 3.5.2 search thru table and delete CD
         DataProcessor.delete_album(intIDDel, lstTbl)
         IO.show_inventory(lstTbl)
